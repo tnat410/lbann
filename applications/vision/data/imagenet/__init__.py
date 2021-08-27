@@ -17,6 +17,7 @@ def make_data_reader(num_classes=1000):
 
     # Paths to ImageNet data
     # Note: Paths are only known for some compute centers
+    '''
     compute_center = lbann.contrib.launcher.compute_center()
     if compute_center == 'lc':
         from lbann.contrib.lc.paths import imagenet_dir, imagenet_labels
@@ -52,5 +53,6 @@ def make_data_reader(num_classes=1000):
     message.reader[0].data_filename = train_label_file
     message.reader[1].data_filedir = test_data_dir
     message.reader[1].data_filename = test_label_file
-
+    '''
+    
     return message
