@@ -5,7 +5,7 @@ import google.protobuf.text_format
 import lbann
 import lbann.contrib.launcher
 
-def make_data_reader(num_classes=1000):
+def make_data_reader(num_classes=1000,validation_percent=0.1):
 
     # Load Protobuf message from file
     current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -15,9 +15,15 @@ def make_data_reader(num_classes=1000):
         google.protobuf.text_format.Merge(f.read(), message)
     message = message.data_reader
 
+
+    if validation_percent is not None:
+        assert message.reader[0].role == "train"
+        message.reader[0].validation_percent = validation_percent
+        message.reader[0].tournament_percent = validation_percent
+
+    '''
     # Paths to ImageNet data
     # Note: Paths are only known for some compute centers
-    '''
     compute_center = lbann.contrib.launcher.compute_center()
     if compute_center == 'lc':
         from lbann.contrib.lc.paths import imagenet_dir, imagenet_labels
@@ -47,12 +53,12 @@ def make_data_reader(num_classes=1000):
         raise FileNotFoundError('could not access {}'.format(test_data_dir))
     if not os.path.isfile(test_label_file):
         raise FileNotFoundError('could not access {}'.format(test_label_file))
-
+    
     # Set paths
     message.reader[0].data_filedir = train_data_dir
     message.reader[0].data_filename = train_label_file
     message.reader[1].data_filedir = test_data_dir
     message.reader[1].data_filename = test_label_file
     '''
-    
+
     return message
