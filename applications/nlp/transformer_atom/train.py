@@ -163,6 +163,8 @@ def make_model(
 # ----------------------------------------------
 
 def make_data_reader():
+	
+    # Train reader	
     reader = lbann.reader_pb2.DataReader()
     _reader = reader.reader.add()
     _reader.name = 'python'
@@ -176,7 +178,7 @@ def make_data_reader():
     _reader.python.num_samples_function = 'num_train_samples'
     _reader.python.sample_dims_function = 'sample_dims'
 
-    # Train test reader
+    # Test reader
     _reader = reader.reader.add()
     _reader.name = 'python'
     _reader.role = 'test'
