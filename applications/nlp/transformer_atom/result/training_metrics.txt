@@ -1,0 +1,81 @@
+Epoch  0
+Validity %  0.0
+Same %  0.0
+Epoch  1
+Validity %  32.03125
+Same %  29.6875
+Epoch  2
+Validity %  9.765625
+Same %  8.984375
+Epoch  3
+Validity %  22.265625
+Same %  21.09375
+Epoch  4
+Validity %  20.3125
+Same %  20.3125
+Epoch  5
+Validity %  25.78125
+Same %  25.78125
+Epoch  6
+Validity %  2.734375
+Same %  2.734375
+Epoch  7
+Validity %  0.390625
+Same %  0.390625
+Epoch  8
+Validity %  3.125
+Same %  3.125
+Epoch  9
+Validity %  3.90625
+Same %  3.90625
+Epoch  10
+Validity %  21.875
+Same %  21.484375
+Epoch  11
+Validity %  25.0
+Same %  23.046875
+Epoch  12
+Validity %  4.296875
+Same %  4.296875
+Epoch  13
+Validity %  5.859375
+Same %  5.859375
+Epoch  14
+Validity %  3.125
+Same %  3.125
+Epoch  15
+Validity %  30.859375
+Same %  30.46875
+Epoch  16
+Validity %  4.6875
+Same %  4.6875
+Epoch  17
+Validity %  7.8125
+Same %  7.8125
+Epoch  18
+Validity %  28.515625
+Same %  28.125
+Epoch  19
+Validity %  92.578125
+Same %  91.796875
+Epoch  20
+Validity %  51.5625
+Same %  51.5625
+Epoch  21
+Validity %  48.046875
+Same %  44.53125
+Epoch  22
+Validity %  0.0
+Same %  0.0
+Epoch  23
+Validity %  0.78125
+Same %  0.390625
+Epoch  24
+Validity %  3.515625
+Same %  1.953125
+Epoch  25
+Validity %  4.296875
+Same %  3.125
+Epoch  26
+Validity %  17.96875
+Same %  16.40625
