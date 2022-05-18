@@ -417,7 +417,7 @@ class Transformer(lbann.modules.Module):
                     vals.pop()
             weights = lbann.Weights(
                 initializer=lbann.ValueInitializer(values=vals),
-                optimizer=None,
+                optimizer=lbann.NoOptimizer(),
                 name=f'{self.name}_positional{sequence_length}_weights',
             )
             self._positional_encoding_cache[sequence_length] = lbann.WeightsLayer(
