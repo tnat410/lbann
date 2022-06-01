@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 import argparse
+import datetime
 import os
 import sys
 import json
@@ -11,19 +12,34 @@ import lbann.contrib.launcher
 
 from lbann.models import RoBERTa
 
+
+# Local imports
+current_dir = os.path.dirname(os.path.realpath(__file__))
+root_dir = os.path.dirname(current_dir)
+sys.path.append(root_dir)
+import utils.paths
+
+
+
+import dataset
+# Dataset properties
+vocab_size = dataset.vocab_size()
+sequence_length = dataset.sequence_length
+pad_index = dataset.pad_index
+
 # ----------------------------------------------
 # Options
 # ----------------------------------------------
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--epochs",
-    default=10,
+    default=2,
     type=int,
     help="number of epochs to train",
 )
 parser.add_argument(
     "--mini-batch-size",
-    default=32,
+    default=256,#32,
     type=int,
     help="size of minibatches for training",
 )
@@ -50,6 +66,22 @@ parser.add_argument(
 lbann.contrib.args.add_scheduler_arguments(parser)
 lbann_params = parser.parse_args()
 
+
+
+# ----------------------------------------------
+# Work directory
+# ----------------------------------------------
+
+timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+work_dir = os.path.join(
+    utils.paths.root_dir(),
+    'RoBERTa/exps',
+    f'{timestamp}_{lbann_params.job_name}',
+)
+os.makedirs(work_dir, exist_ok=True)
+
+
+
 # ----------------------------------------------
 # Data Reader
 # ----------------------------------------------
@@ -64,8 +96,8 @@ def make_data_reader():
     _reader.percent_of_data_to_use = 1.0
     _reader.python.module = "dataset"
     _reader.python.module_dir = os.path.dirname(os.path.realpath(__file__))
-    _reader.python.sample_function = "get_sample"
-    _reader.python.num_samples_function = "num_samples"
+    _reader.python.sample_function = "get_train_sample"
+    _reader.python.num_samples_function = "num_train_samples"
     _reader.python.sample_dims_function = "sample_dims"
 
     # Validation data reader
@@ -76,8 +108,8 @@ def make_data_reader():
     _reader.percent_of_data_to_use = 1.0
     _reader.python.module = "dataset"
     _reader.python.module_dir = os.path.dirname(os.path.realpath(__file__))
-    _reader.python.sample_function = "get_sample"
-    _reader.python.num_samples_function = "num_samples"
+    _reader.python.sample_function = "get_val_sample"
+    _reader.python.num_samples_function = "num_val_samples"
     _reader.python.sample_dims_function = "sample_dims"
 
     # Test data reader
@@ -88,8 +120,8 @@ def make_data_reader():
     _reader.percent_of_data_to_use = 1.0
     _reader.python.module = "dataset"
     _reader.python.module_dir = os.path.dirname(os.path.realpath(__file__))
-    _reader.python.sample_function = "get_sample"
-    _reader.python.num_samples_function = "num_samples"
+    _reader.python.sample_function = "get_test_sample"
+    _reader.python.num_samples_function = "num_test_samples"
     _reader.python.sample_dims_function = "sample_dims"
 
     return reader
@@ -168,32 +200,142 @@ class CrossEntropyLoss(lbann.modules.Module):
 # ----------------------------------------------
 with open("./config.json") as f:
     config = json.load(f, object_hook=lambda d: SimpleNamespace(**d))
-config.input_shape = (16, 32)
-config.load_weights = os.path.abspath('./pretrained_weights')
+config.input_shape = (1,57)#(16, 32)
 
 # Construct the model
-input_ = lbann.Slice(
-    lbann.Input(data_field="samples"),
-    slice_points=[0, 1, 1 + np.prod(config.input_shape)],
+classifier_weights = lbann.Weights(initializer=lbann.GlorotNormalInitializer(),name='classifier_weight')
+
+# Input is two sequences of token IDs
+input_ = lbann.Input(data_field='samples')
+
+tokens = lbann.Identity(lbann.Slice(
+	input_,
+	axis=0,
+	slice_points=[0,sequence_length, 2*sequence_length],
+))
+
+#labels = lbann.Identity(tokens,name='labels')
+encoder_input = lbann.Identity(tokens,name='encoder_input')
+decoder_input = lbann.Identity(tokens,name='decoder_input')
+
+
+roberta = RoBERTa(config,add_pooling_layer=False,load_weights=False)
+
+out = roberta(decoder_input)
+output = lbann.Identity(out, name = 'out')
+output = lbann.Reshape(output, dims=(57,256),name='output')
+
+# Reconstruct decoder input
+preds = lbann.ChannelwiseFullyConnected(
+        output,
+        weights=classifier_weights,
+        output_channel_dims=[vocab_size],
+        bias=False,
+        transpose=True,
+        name='pred',
 )
-labels = lbann.Identity(input_)
-sample = lbann.Reshape(input_, dims=config.input_shape)
-roberta = RoBERTa(config, load_weights=config.load_weights)
-out = roberta(sample)
-out = lbann.ChannelwiseFullyConnected(out, output_channel_dims=[1000])
-loss = CrossEntropyLoss(10, data_layout="model_parallel")
-obj = loss(out, labels)
+
+preds = lbann.ChannelwiseSoftmax(preds, name='pred_sm')
+preds = lbann.Slice(preds, axis=0, slice_points=range(sequence_length+1),name='slice_pred')
+preds = [lbann.Identity(preds) for _ in range(sequence_length)]
+
+
+########
+# Loss
+########
+# Count number of non-pad tokens
+label_tokens = lbann.Identity(lbann.Slice(
+	input_,
+        slice_points=[sequence_length, 2*sequence_length],
+	name='input_tokens',
+))
+
+pads = lbann.Constant(value=pad_index, num_neurons=sequence_length)
+is_not_pad = lbann.NotEqual(label_tokens, pads)
+num_not_pad = lbann.Reduction(is_not_pad, mode='sum')
+
+# Cross entropy loss with label smoothing
+label_tokens = lbann.Slice(
+	label_tokens,
+        slice_points=range(sequence_length+1),
+	name='label_tokens',
+    )
+
+label_tokens = [lbann.Identity(label_tokens) for _ in range(sequence_length)]
+
+loss = []
+
+for i in range(sequence_length):
+	label = lbann.OneHot(label_tokens[i], size=vocab_size)
+	label = lbann.Reshape(label, dims=[1, vocab_size])
+	loss.append(lbann.CrossEntropy(preds[i], label))
+
+loss = lbann.Concatenation(loss)
+
+# Average cross entropy over non-pad tokens
+loss_scales = lbann.Divide(
+	is_not_pad,
+        lbann.Tessellate(num_not_pad, hint_layer=is_not_pad),
+    )
+loss = lbann.Multiply(loss, loss_scales)
+obj = lbann.Reduction(loss, mode='sum')
+
 metrics = [lbann.Metric(obj, name="loss")]
+
+
+###########
+# Callbacks
+###########
+
+callbacks = [lbann.CallbackPrint(),
+             lbann.CallbackTimer(),]
+
+callbacks.append(
+	lbann.CallbackDumpOutputs(
+		batch_interval=781,
+		#epoch_interval=5,
+		execution_modes='train', 
+		directory=os.path.join(work_dir, 'train'),
+		#layers='encoder_input decoder_input sample labels')
+		layers='input_tokens')
+    )
+
+callbacks.append(
+	lbann.CallbackDumpOutputs(
+		batch_interval=781,
+		#epoch_interval=5,
+		execution_modes='train', 
+		directory=os.path.join(work_dir, 'train'),
+		#layers='out out_cwfc pred pred_sm')
+		layers='pred_sm')#pred_sm
+    )
+
+
+callbacks.append(
+	lbann.CallbackDumpOutputs(
+		batch_interval=97,
+		#epoch_interval=5,
+		execution_modes='test', 
+		directory=os.path.join(work_dir, 'test'),
+		#layers='encoder_input decoder_input sample labels')
+		layers='input_tokens')
+    )
+
+callbacks.append(
+	lbann.CallbackDumpOutputs(
+		batch_interval=97,
+		#epoch_interval=5,
+		execution_modes='test', 
+		directory=os.path.join(work_dir, 'test'),
+		layers='pred_sm')
+    )
 
 model = lbann.Model(
     lbann_params.epochs,
     layers=lbann.traverse_layer_graph(input_),
     objective_function=obj,
     metrics=metrics,
-    callbacks=[
-        lbann.CallbackPrint(),
-        lbann.CallbackTimer(),
-    ],
+    callbacks=callbacks,
 )
 
 # Setup trainer, optimizer, data_reader
@@ -217,7 +359,7 @@ lbann.contrib.launcher.run(
     model,
     data_reader,
     optimizer,
-    work_dir=lbann_params.work_dir,
+    work_dir=work_dir,
     job_name=lbann_params.job_name,
     lbann_args=["--num_io_threads=1"],
     batch_job=lbann_params.batch_job,
