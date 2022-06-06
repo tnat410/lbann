@@ -220,7 +220,7 @@ encoder_input = lbann.Identity(tokens,name='encoder_input')
 
 roberta = RoBERTa(config,add_pooling_layer=False,load_weights=False)
 output = roberta(encoder_input)
-output = lbann.Reshape(output, dims=(57,256),name='sample')
+output = lbann.Reshape(output, dims=(sequence_length,config.hidden_size),name='sample')
 
 
 #-----------------
