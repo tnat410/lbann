@@ -265,7 +265,7 @@ label_tokens = [lbann.Identity(label_tokens) for _ in range(sequence_length)]
 
 loss = []
 
-loss_func = CrossEntropyLoss(vocab_size,weights=classifier_weights2, data_layout="model_parallel")
+loss_func = CrossEntropyLoss(vocab_size, data_layout="model_parallel")
 for i in range(sequence_length):
 	obj_loss = loss_func(preds[i], label_tokens[i])
 	loss.append(obj_loss)
