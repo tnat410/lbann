@@ -8,8 +8,10 @@ sequence_length = 57
 samples = np.load("/p/vast1/lbann/datasets/zinc/moses_zinc_train250K.npy", allow_pickle=True) 
 
 train_samples = samples[:int(samples.size*0.8)]
+#train_samples = samples[:256*4]
 val_samples = samples[int(samples.size*0.8):int(samples.size*0.9)]
 test_samples = samples[int(samples.size*0.9):]
+
 
 # Train sample access functions
 def get_train_sample(index):
@@ -19,11 +21,11 @@ def get_train_sample(index):
     else:
         sample = np.resize(sample, sequence_length)
 
-    sample_all = np.full(2*sequence_length, pad_index, dtype=int)
-    sample_all[0:len(sample)] = sample
-    sample_all[sequence_length:sequence_length+len(sample)] = sample
+    #sample_all = np.full(2*sequence_length, pad_index, dtype=int)
+    #sample_all[0:len(sample)] = sample
+    #sample_all[sequence_length:sequence_length+len(sample)] = sample
 
-    return sample_all
+    return sample
 
 # Validation sample access functions
 def get_val_sample(index):
@@ -33,12 +35,12 @@ def get_val_sample(index):
     else:
         sample = np.resize(sample, sequence_length)
 
-    sample_all = np.full(2*sequence_length, pad_index, dtype=int)
-    sample_all[0:len(sample)] = sample
-    sample_all[sequence_length:sequence_length+len(sample)] = sample
+    #sample_all = np.full(2*sequence_length, pad_index, dtype=int)
+    #sample_all[0:len(sample)] = sample
+    #sample_all[sequence_length:sequence_length+len(sample)] = sample
 
-    return sample_all
-    #return sample
+    #return sample_all
+    return sample
 
 # Test sample access functions
 def get_test_sample(index):
@@ -52,8 +54,8 @@ def get_test_sample(index):
     sample_all[0:len(sample)] = sample
     sample_all[sequence_length:sequence_length+len(sample)] = sample
 
-    return sample_all
-    #return sample
+    #return sample_all
+    return sample
 
 
 def num_train_samples():
@@ -70,3 +72,5 @@ def sample_dims():
 
 def vocab_size():
     return 30
+
+

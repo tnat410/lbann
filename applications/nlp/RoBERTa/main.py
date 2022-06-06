@@ -33,13 +33,13 @@ pad_index = dataset.pad_index
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--epochs",
-    default=2,
+    default=50,
     type=int,
     help="number of epochs to train",
 )
 parser.add_argument(
     "--mini-batch-size",
-    default=256,#32,
+    default=256,
     type=int,
     help="size of minibatches for training",
 )
@@ -200,10 +200,12 @@ class CrossEntropyLoss(lbann.modules.Module):
 # ----------------------------------------------
 with open("./config.json") as f:
     config = json.load(f, object_hook=lambda d: SimpleNamespace(**d))
-config.input_shape = (1,57)#(16, 32)
+config.input_shape = (1,57)
+
 
 # Construct the model
-classifier_weights = lbann.Weights(initializer=lbann.GlorotNormalInitializer(),name='classifier_weight')
+classifier_weights1 = lbann.Weights(initializer=lbann.GlorotNormalInitializer(),name='classifier_weight1')
+classifier_weights2 = lbann.Weights(initializer=lbann.GlorotNormalInitializer(),name='classifier_weight2')
 
 # Input is two sequences of token IDs
 input_ = lbann.Input(data_field='samples')
@@ -211,42 +213,40 @@ input_ = lbann.Input(data_field='samples')
 tokens = lbann.Identity(lbann.Slice(
 	input_,
 	axis=0,
-	slice_points=[0,sequence_length, 2*sequence_length],
+	slice_points=[0,sequence_length],
 ))
 
-#labels = lbann.Identity(tokens,name='labels')
 encoder_input = lbann.Identity(tokens,name='encoder_input')
-decoder_input = lbann.Identity(tokens,name='decoder_input')
-
 
 roberta = RoBERTa(config,add_pooling_layer=False,load_weights=False)
+output = roberta(encoder_input)
+output = lbann.Reshape(output, dims=(57,256),name='sample')
 
-out = roberta(decoder_input)
-output = lbann.Identity(out, name = 'out')
-output = lbann.Reshape(output, dims=(57,256),name='output')
 
-# Reconstruct decoder input
+#-----------------
+# Reconstruct input
+#-----------------
 preds = lbann.ChannelwiseFullyConnected(
         output,
-        weights=classifier_weights,
+        weights=classifier_weights1,
         output_channel_dims=[vocab_size],
         bias=False,
         transpose=True,
         name='pred',
 )
 
-preds = lbann.ChannelwiseSoftmax(preds, name='pred_sm')
 preds = lbann.Slice(preds, axis=0, slice_points=range(sequence_length+1),name='slice_pred')
 preds = [lbann.Identity(preds) for _ in range(sequence_length)]
 
 
-########
+#--------
 # Loss
-########
+#--------
+
 # Count number of non-pad tokens
 label_tokens = lbann.Identity(lbann.Slice(
 	input_,
-        slice_points=[sequence_length, 2*sequence_length],
+        slice_points=[0,sequence_length],
 	name='input_tokens',
 ))
 
@@ -254,7 +254,7 @@ pads = lbann.Constant(value=pad_index, num_neurons=sequence_length)
 is_not_pad = lbann.NotEqual(label_tokens, pads)
 num_not_pad = lbann.Reduction(is_not_pad, mode='sum')
 
-# Cross entropy loss with label smoothing
+# Cross entropy loss 
 label_tokens = lbann.Slice(
 	label_tokens,
         slice_points=range(sequence_length+1),
@@ -265,10 +265,10 @@ label_tokens = [lbann.Identity(label_tokens) for _ in range(sequence_length)]
 
 loss = []
 
+loss_func = CrossEntropyLoss(vocab_size,weights=classifier_weights2, data_layout="model_parallel")
 for i in range(sequence_length):
-	label = lbann.OneHot(label_tokens[i], size=vocab_size)
-	label = lbann.Reshape(label, dims=[1, vocab_size])
-	loss.append(lbann.CrossEntropy(preds[i], label))
+	obj_loss = loss_func(preds[i], label_tokens[i])
+	loss.append(obj_loss)
 
 loss = lbann.Concatenation(loss)
 
@@ -278,57 +278,61 @@ loss_scales = lbann.Divide(
         lbann.Tessellate(num_not_pad, hint_layer=is_not_pad),
     )
 loss = lbann.Multiply(loss, loss_scales)
-obj = lbann.Reduction(loss, mode='sum')
 
-metrics = [lbann.Metric(obj, name="loss")]
+loss = lbann.Reduction(loss, mode='sum',name='loss_red')
+
+metrics = [lbann.Metric(loss, name="loss")]
 
 
-###########
+#-----------
 # Callbacks
-###########
+#-----------
 
 callbacks = [lbann.CallbackPrint(),
              lbann.CallbackTimer(),]
 
+
 callbacks.append(
 	lbann.CallbackDumpOutputs(
 		batch_interval=781,
-		#epoch_interval=5,
 		execution_modes='train', 
-		directory=os.path.join(work_dir, 'train'),
-		#layers='encoder_input decoder_input sample labels')
+		directory=os.path.join(work_dir, 'train_input'),
 		layers='input_tokens')
     )
 
+
 callbacks.append(
 	lbann.CallbackDumpOutputs(
 		batch_interval=781,
-		#epoch_interval=5,
 		execution_modes='train', 
-		directory=os.path.join(work_dir, 'train'),
-		#layers='out out_cwfc pred pred_sm')
-		layers='pred_sm')#pred_sm
+		directory=os.path.join(work_dir, 'train_output'),
+		layers='pred')
     )
-
 
 callbacks.append(
 	lbann.CallbackDumpOutputs(
 		batch_interval=97,
-		#epoch_interval=5,
 		execution_modes='test', 
-		directory=os.path.join(work_dir, 'test'),
-		#layers='encoder_input decoder_input sample labels')
+		directory=os.path.join(work_dir, 'test_input'),
 		layers='input_tokens')
     )
 
 callbacks.append(
 	lbann.CallbackDumpOutputs(
 		batch_interval=97,
-		#epoch_interval=5,
 		execution_modes='test', 
-		directory=os.path.join(work_dir, 'test'),
-		layers='pred_sm')
+		directory=os.path.join(work_dir, 'test_output'),
+		layers='pred')
     )
+
+'''
+callbacks.append(
+	lbann.CallbackDumpWeights(
+		directory=os.path.join(work_dir, 'weights'),
+		epoch_interval=2,
+	)
+    )
+'''
 
 model = lbann.Model(
     lbann_params.epochs,
@@ -338,16 +342,17 @@ model = lbann.Model(
     callbacks=callbacks,
 )
 
+
 # Setup trainer, optimizer, data_reader
 trainer = lbann.Trainer(
     mini_batch_size=lbann_params.mini_batch_size,
     num_parallel_readers=1,
 )
 optimizer = lbann.Adam(
-    learn_rate=0.01,
+    learn_rate=0.0001,
     beta1=0.9,
-    beta2=0.99,
-    eps=1e-8,
+    beta2=0.98,
+    eps=1e-9,
 )
 data_reader = make_data_reader()
 
