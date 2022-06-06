@@ -207,7 +207,7 @@ config.input_shape = (1,57)
 classifier_weights1 = lbann.Weights(initializer=lbann.GlorotNormalInitializer(),name='classifier_weight1')
 classifier_weights2 = lbann.Weights(initializer=lbann.GlorotNormalInitializer(),name='classifier_weight2')
 
-# Input is two sequences of token IDs
+# Input is sequences of token IDs
 input_ = lbann.Input(data_field='samples')
 
 tokens = lbann.Identity(lbann.Slice(
