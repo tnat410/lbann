@@ -646,7 +646,7 @@ class RobertaLMHead(lbann.modules.Module)):
     def forward(self, input_tensor):
         
         #x = self.dense(features)
-        hidden_state,hidden_size = lbann.modules.PytorchLinear(
+        hidden_state, hidden_shape = lbann.modules.PytorchLinear(
             input_tensor,
             self.input_shape,
             self.hidden_size,
