@@ -627,3 +627,63 @@ class RoBERTa(lbann.modules.Module):
             return pooled_output
         else:
             return encoder_output
+        
+        
+class RobertaLMHead(lbann.modules.Module)):
+    """Roberta Head for masked language modeling."""
+
+    def __init__(self, config, name):
+        self.input_shape = config.input_shape + (config.intermediate_size,)
+        self.hidden_size = config.hidden_size
+        self.hidden_dropout_prob = config.hidden_dropout_prob
+        self.layer_norm_eps = config.layer_norm_eps
+        self.name = name
+        if isinstance(config.hidden_act, str):
+            self.intermediate_act_fn = ACT2FN[config.hidden_act]
+        else:
+            self.intermediate_act_fn = config.hidden_act
+        
+    def forward(self, input_tensor):
+        
+        #x = self.dense(features)
+        hidden_state,hidden_size = lbann.modules.PytorchLinear(
+            input_tensor,
+            self.input_shape,
+            self.hidden_size,
+            name=".".join((self.name, "dense")),
+            return_dims=True,
+        )
+        
+        #x = gelu(x)
+        hidden_states = self.intermediate_act_fn(hidden_states)
+
+        #x = self.layer_norm(x)
+        hidden_states = lbann.modules.PytorchLayerNorm(
+            lbann.Add(hidden_states, input_tensor),
+            self.layer_norm_eps,
+            hidden_shape,
+            name=".".join((self.name, "LayerNorm")),
+        )
+
+        return x
+
+class RoBERTaMLM(lbann.modules.Module):
+    def __init__(self, config, load_weights=True):
+        self.config = config
+
+        # A custom directory can be passed instead of True/False
+        if isinstance(load_weights, str):
+            if not os.path.isdir(load_weights):
+                raise ValueError(
+                    f"Path to pretrained weights does not exist: {load_weights}"
+                )        
+                
+       self.roberta = Roberta(config, add_pooling_layer=False, load_weights=load_weights)
+       self.lm_head = RobertaLMHead(config, "robertaLMHead")
+        
+    def forward(self,input_ids):
+            
+        hidden_state = roberta(input_ids)
+        output = lm_head(hidden_state)
+    
+        return output
