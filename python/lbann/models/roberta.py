@@ -665,7 +665,7 @@ class RobertaLMHead(lbann.modules.Module)):
             name=".".join((self.name, "LayerNorm")),
         )
 
-        return x
+        return hidden_states
 
 class RoBERTaMLM(lbann.modules.Module):
     def __init__(self, config, load_weights=True):
