@@ -646,7 +646,7 @@ class RobertaLMHead(lbann.modules.Module)):
     def forward(self, input_tensor):
         
         #x = self.dense(features)
-        hidden_state, hidden_shape = lbann.modules.PytorchLinear(
+        hidden_states, hidden_shape = lbann.modules.PytorchLinear(
             input_tensor,
             self.input_shape,
             self.hidden_size,
@@ -678,12 +678,12 @@ class RoBERTaMLM(lbann.modules.Module):
                     f"Path to pretrained weights does not exist: {load_weights}"
                 )        
                 
-       self.roberta = Roberta(config, add_pooling_layer=False, load_weights=load_weights)
-       self.lm_head = RobertaLMHead(config, "robertaLMHead")
+        self.roberta = RoBERTa(config, add_pooling_layer=False, load_weights=load_weights)
+        self.lm_head = RobertaLMHead(config, "robertaLMHead")
         
     def forward(self,input_ids):
             
-        hidden_state = roberta(input_ids)
-        output = lm_head(hidden_state)
+        hidden_states = self.roberta(input_ids)
+        output = self.lm_head(hidden_states)
     
         return output
