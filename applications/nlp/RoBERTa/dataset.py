@@ -1,17 +1,30 @@
 import numpy as np
 
-bos_index = 26
-eos_index = 27
-pad_index = 28
+bos_index = 12#26
+eos_index = 13#27
+pad_index = 0#28
+ignore_index = -100
 
 sequence_length = 57
-samples = np.load("/p/vast1/lbann/datasets/zinc/moses_zinc_train250K.npy", allow_pickle=True) 
+samples = np.load("/g/g92/tran71/tran71/lbann_new/applications/nlp/chemBerta/zinc250k.npy", allow_pickle=True) 
 
 train_samples = samples[:int(samples.size*0.8)]
-#train_samples = samples[:256*4]
 val_samples = samples[int(samples.size*0.8):int(samples.size*0.9)]
 test_samples = samples[int(samples.size*0.9):]
 
+# Masking samples
+def masking(sample):
+    sample_masked = sample.copy()
+    rand = np.random.uniform(size=(1,sequence_length))
+    replace = (rand < 0.15) * (sample != bos_index) * (sample != eos_index) * (sample != pad_index) 
+    mask_idx = np.nonzero(replace)[1]
+    for idx in mask_idx:
+        chance = np.random.uniform()
+        if(chance < 0.1): #replace with random character
+            sample_masked[idx] = np.random.randint(15,591)
+        elif (0.1 < chance < 0.9): #replace with mask character
+            sample_masked[idx] = 14 
+    return sample_masked,mask_idx
 
 # Train sample access functions
 def get_train_sample(index):
@@ -21,11 +34,22 @@ def get_train_sample(index):
     else:
         sample = np.resize(sample, sequence_length)
 
-    #sample_all = np.full(2*sequence_length, pad_index, dtype=int)
-    #sample_all[0:len(sample)] = sample
-    #sample_all[sequence_length:sequence_length+len(sample)] = sample
+    sample_mask, mask_idx = masking(sample)
 
-    return sample
+    idx = [i for i in range(0,sequence_length)]
+    non_mask_idx = [i for i in idx if (i not in mask_idx)]
+
+    label  = sample_mask.copy()
+
+    label[non_mask_idx] = ignore_index
+
+    sample_all = np.full(3*sequence_length, pad_index, dtype=int)
+    sample_all[0:len(sample)] = sample
+    sample_all[sequence_length:2*sequence_length] = sample_mask
+    sample_all[2*sequence_length:3*sequence_length] = label
+
+    return sample_all
+
 
 # Validation sample access functions
 def get_val_sample(index):
@@ -35,12 +59,22 @@ def get_val_sample(index):
     else:
         sample = np.resize(sample, sequence_length)
 
-    #sample_all = np.full(2*sequence_length, pad_index, dtype=int)
-    #sample_all[0:len(sample)] = sample
-    #sample_all[sequence_length:sequence_length+len(sample)] = sample
+    sample_mask, mask_idx = masking(sample)
 
-    #return sample_all
-    return sample
+    idx = [i for i in range(0,sequence_length)]
+    non_mask_idx = [i for i in idx if (i not in mask_idx)]
+
+    label  = sample_mask.copy()
+
+    label[non_mask_idx] = ignore_index
+
+    sample_all = np.full(3*sequence_length, pad_index, dtype=int)
+    sample_all[0:len(sample)] = sample
+    sample_all[sequence_length:2*sequence_length] = sample_mask
+    sample_all[2*sequence_length:3*sequence_length] = label
+
+    return sample_all
+
 
 # Test sample access functions
 def get_test_sample(index):
@@ -50,13 +84,21 @@ def get_test_sample(index):
     else:
         sample = np.resize(sample, sequence_length)
 
-    sample_all = np.full(2*sequence_length, pad_index, dtype=int)
+    sample_mask, mask_idx = masking(sample)
+
+    idx = [i for i in range(0,sequence_length)]
+    non_mask_idx = [i for i in idx if (i not in mask_idx)]
+
+    label  = sample_mask.copy()
+
+    label[non_mask_idx] = ignore_index
+
+    sample_all = np.full(3*sequence_length, pad_index, dtype=int)
     sample_all[0:len(sample)] = sample
-    sample_all[sequence_length:sequence_length+len(sample)] = sample
+    sample_all[sequence_length:2*sequence_length] = sample_mask
+    sample_all[2*sequence_length:3*sequence_length] = label
 
-    #return sample_all
-    return sample
-
+    return sample_all
 
 def num_train_samples():
     return train_samples.shape[0]
@@ -68,9 +110,8 @@ def num_test_samples():
     return val_samples.shape[0]
 
 def sample_dims():
-    return (2*sequence_length+1,)
+    return (3*sequence_length+1,)
 
 def vocab_size():
-    return 30
-
+    return 600
 
