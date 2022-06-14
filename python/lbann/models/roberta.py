@@ -41,8 +41,6 @@ def _load_pretrained_weights(
     load_weights=True,
 ):
     if not load_weights:
-	#weights = lbann.Weights(initializer=lbann.GlorotNormalInitializer(),name=".".join((self.name, "_weight")))
-        #return weights
         return []
 
     # Use custom directory for loading weights
@@ -52,7 +50,6 @@ def _load_pretrained_weights(
     weights = []
     for f in fn:
         w_file = os.path.join(file_dir, f + ".npy")
-        #w_file = os.path.join(file_dir,"roberta." + f + ".npy")
         if not os.path.isfile(w_file):
             raise ValueError(f"Pretrained weight file does not exist: {w_file}")
         weights.append(lbann.Weights(initializer=lbann.NumpyInitializer(file=w_file)))
@@ -632,7 +629,8 @@ class RoBERTa(lbann.modules.Module):
             return encoder_output
 
 class RobertaLMHead(lbann.modules.Module):
-    """Roberta Head for masked language modeling."""
+    """Roberta Head for masked language modeling:"""
+    # https://github.com/huggingface/transformers/blob/v4.15.0/src/transformers/models/roberta/modeling_roberta.py#L1034
 
     def __init__(self, config, name,load_weights=True):
 
