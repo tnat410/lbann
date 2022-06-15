@@ -675,6 +675,10 @@ class RobertaLMHead(lbann.modules.Module):
             lbann.Add(hidden_states, input_tensor),
             self.layer_norm_eps,
             hidden_shape,
+            weights=_load_pretrained_weights(
+                ".".join((self.name, "layer_norm.weightbias")),
+                load_weights=self.load_weights,
+            ),
             name=".".join((self.name, "layer_norm")),
         )
 
