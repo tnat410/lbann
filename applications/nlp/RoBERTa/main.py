@@ -209,7 +209,7 @@ config.load_weights = os.path.abspath('./pretrained_weights')
 
 # Construct the model
 
-# Input is 3 sequences of smile string: original string, masked string, label string
+# Input is 3 sequences of smile string: original string, masked string, label string - every token is -100 (ignore) except the masked token. 
 input_ = lbann.Input(data_field='samples')
 
 input_strings = lbann.Identity(lbann.Slice(
