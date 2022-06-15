@@ -275,7 +275,7 @@ for i in range(sequence_length):
 loss = lbann.Concatenation(loss)
 
 # Average cross entropy over masked tokens
-loss_scales = lbann.Divide(
+loss_scales = lbann.SafeDivide(
 	is_masked,
         lbann.Tessellate(num_masked, hint_layer=is_masked),
     )
