@@ -39,7 +39,7 @@ def get_train_sample(index):
     idx = [i for i in range(0,sequence_length)]
     non_mask_idx = [i for i in idx if (i not in mask_idx)]
 
-    label  = sample_mask.copy()
+    label  = sample.copy()
 
     label[non_mask_idx] = ignore_index
 
@@ -59,19 +59,22 @@ def get_val_sample(index):
     else:
         sample = np.resize(sample, sequence_length)
 
-    sample_mask, mask_idx = masking(sample)
+    mask_idx = np.random.randint(0,sequence_length)
+
+    sample_mask = sample.copy()
+    sample_mask[mask_idx] = 14
 
     idx = [i for i in range(0,sequence_length)]
-    non_mask_idx = [i for i in idx if (i not in mask_idx)]
+    non_mask_idx = [i for i in idx if (i != mask_idx)]
 
-    label  = sample_mask.copy()
+    label  = sample.copy()
 
     label[non_mask_idx] = ignore_index
 
     sample_all = np.full(3*sequence_length, pad_index, dtype=int)
     sample_all[0:len(sample)] = sample
     sample_all[sequence_length:2*sequence_length] = sample_mask
-    sample_all[2*sequence_length:3*sequence_length] = label
+    sample_all[2*sequence_length:3*sequence_length] = sample
 
     return sample_all
 
@@ -84,19 +87,22 @@ def get_test_sample(index):
     else:
         sample = np.resize(sample, sequence_length)
 
-    sample_mask, mask_idx = masking(sample)
+    mask_idx = np.random.randint(0,sequence_length)
+
+    sample_mask = sample.copy()
+    sample_mask[mask_idx] = 14
 
     idx = [i for i in range(0,sequence_length)]
-    non_mask_idx = [i for i in idx if (i not in mask_idx)]
+    non_mask_idx = [i for i in idx if (i != mask_idx)]
 
-    label  = sample_mask.copy()
+    label  = sample.copy()
 
     label[non_mask_idx] = ignore_index
 
     sample_all = np.full(3*sequence_length, pad_index, dtype=int)
     sample_all[0:len(sample)] = sample
     sample_all[sequence_length:2*sequence_length] = sample_mask
-    sample_all[2*sequence_length:3*sequence_length] = label
+    sample_all[2*sequence_length:3*sequence_length] = sample
 
     return sample_all
 
