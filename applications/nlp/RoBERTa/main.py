@@ -266,7 +266,6 @@ label_tokens = [lbann.Identity(label_tokens) for _ in range(sequence_length)]
 
 loss = []
 
-
 loss_func = CrossEntropyLoss(vocab_size, data_layout="model_parallel")
 for i in range(sequence_length):
 	obj_loss = loss_func(preds[i], label_tokens[i])
@@ -300,7 +299,7 @@ callbacks.append(
 		batch_interval=782,
 		execution_modes='train', 
 		directory=os.path.join(work_dir, 'train_input'),
-		layers='input_strings input_masked input_label num_not_pad')
+		layers='input_strings')
     )
 
 
@@ -317,7 +316,7 @@ callbacks.append(
 		batch_interval=98,
 		execution_modes='test', 
 		directory=os.path.join(work_dir, 'test_input'),
-		layers='input_tokens')
+		layers='input_strings')
     )
 
 callbacks.append(
@@ -325,17 +324,15 @@ callbacks.append(
 		batch_interval=98,
 		execution_modes='test', 
 		directory=os.path.join(work_dir, 'test_output'),
-		layers='pred_sm')
+		layers='pred')
     )
 
-'''
 callbacks.append(
 	lbann.CallbackDumpWeights(
 		directory=os.path.join(work_dir, 'weights'),
 		epoch_interval=2,
 	)
     )
-'''
 
 model = lbann.Model(
     lbann_params.epochs,
