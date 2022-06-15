@@ -696,16 +696,14 @@ class RobertaLMHead(lbann.modules.Module):
 
 class RoBERTaMLM(lbann.modules.Module):
     def __init__(self, config, load_weights=True):
-        self.config = config
-        self.load_weights = load_weights
 
         # A custom directory can be passed instead of True/False
         if isinstance(load_weights, str):
             if not os.path.isdir(load_weights):
                 raise ValueError(f"Path to pretrained weights does not exist: {load_weights}")        
                 
-        self.roberta = RoBERTa(config, add_pooling_layer=False, load_weights=self.load_weights)
-        self.lm_head = RobertaLMHead(config, "lm_head",load_weights=self.load_weights)
+        self.roberta = RoBERTa(config, add_pooling_layer=False, load_weights=load_weights)
+        self.lm_head = RobertaLMHead(config, "lm_head",load_weights=load_weights)
         
     def forward(self,input_ids):
             
