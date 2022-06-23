@@ -41,4 +41,4 @@ print(len(smiles_tokenized))
     
 outfile = "zinc250k.npy"
 
-
+np.save(outfile, smiles_tokenized)
