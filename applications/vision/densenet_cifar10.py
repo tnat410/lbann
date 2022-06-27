@@ -2,7 +2,6 @@ import argparse
 import lbann
 import lbann.contrib.args
 import lbann.contrib.launcher
-#import data.imagenet
 import data.cifar10
 
 LOG = True
@@ -17,6 +16,7 @@ def log(string):
 # See src/proto/lbann.proto for possible functions to call.
 # See PyTorch DenseNet:
 # https://github.com/pytorch/vision/blob/master/torchvision/models/densenet.py
+# https://github.com/gpleiss/efficient_densenet_pytorch
 # See "Densely Connected Convolutional Networks" by Huang et. al p.4
 def densenet(statistics_group_size,
              version,
@@ -33,15 +33,12 @@ def densenet(statistics_group_size,
         num_initial_features = 96
     elif version == 40: #cifar10
         growth_rate = 12  # k in the paper
-        layers_per_block = (40, 40, 40)
-        num_initial_features = 16
-    elif version == 100: #cifar10
-        growth_rate = 12  # k in the paper
-        layers_per_block = (100, 100, 100)
-        num_initial_features = 16
+        layers_per_block = (16, 16, 16)
+        num_initial_features = 24
     else:
         raise Exception('Invalid version={v}.'.format(v=version))
     batch_norm_size = 4
+
 
     parent_node, cumulative_layer_num = initial_layer(
         statistics_group_size,
@@ -62,7 +59,7 @@ def densenet(statistics_group_size,
         )
         # num_features += num_layers * growth_rate
         for node in parent_nodes[1:]:
-            num_features += node.num_output_channels
+            num_features += node.out_channels
         parent_node = lbann.Concatenation(parent_nodes)
         cumulative_layer_num += 1
         log('densenet Concatenation. cumulative_layer_num={n}'.format(
@@ -74,7 +71,7 @@ def densenet(statistics_group_size,
                 cumulative_layer_num,
                 parent_node,
                 # In Python 3, this is integer division.
-                num_output_channels=num_features//2,
+                out_channels=num_features//2,
             )
             num_features //= 2
 
@@ -101,20 +98,21 @@ def initial_layer(statistics_group_size,
                   images_node,
                   num_initial_channels
                   ):
-    # 7x7 conv, stride 2
+    # 3x3 conv, stride 1
     convolution_node = lbann.Convolution(
         images_node,
-        conv_dims_i=7,
-        conv_pads_i=3,
-        conv_strides_i=2,
+        kernel_size=3,
+        padding=1,
+        stride=1,
         has_bias=False,
         num_dims=2,
-        num_output_channels=num_initial_channels
+        out_channels=num_initial_channels
     )
     cumulative_layer_num += 1
     log('initial_layer Convolution. cumulative_layer_num={n}'.format(
         n=cumulative_layer_num))
 
+    '''
     batch_normalization_node = standard_batchnorm(statistics_group_size,
                                                   convolution_node)
     cumulative_layer_num += 1
@@ -138,8 +136,10 @@ def initial_layer(statistics_group_size,
     cumulative_layer_num += 1
     log('initial_layer Pooling. cumulative_layer_num={n}'.format(
         n=cumulative_layer_num))
-
     return pooling_node, cumulative_layer_num
+    '''
+
+    return convolution_node, cumulative_layer_num
 
 
 def standard_batchnorm(statistics_group_size, parent_node):
@@ -199,9 +199,9 @@ def dense_layer(statistics_group_size,
         current_layer_num,
         cumulative_layer_num,
         concatenation_node,
-        conv_dims_i=1,
-        conv_pads_i=0,
-        num_output_channels=batch_norm_size * growth_rate
+        kernel_size=1,
+        padding=0,
+        out_channels=batch_norm_size * growth_rate
     )
     conv_block_2_node, cumulative_layer_num = conv_block(
         statistics_group_size,
@@ -209,10 +209,22 @@ def dense_layer(statistics_group_size,
         current_layer_num,
         cumulative_layer_num,
         conv_block_1_node,
-        conv_dims_i=3,
-        conv_pads_i=1,
-        num_output_channels=growth_rate
+        kernel_size=3,
+        padding=1,
+        out_channels=growth_rate
     )
+
+    #'''
+    # Dropout of 20%
+    conv_block_2_node = lbann.Dropout(
+                conv_block_2_node,
+                keep_prob=0.8,
+    )
+    cumulative_layer_num += 1
+    log('dense_block={b} > transition_layer Dropout. cumulative_layer_num={n}'.format(
+        b=current_block_num, n=cumulative_layer_num))
+    #'''
+
     return conv_block_2_node, cumulative_layer_num
 
 
@@ -221,9 +233,9 @@ def conv_block(statistics_group_size,
                current_layer_num,
                cumulative_layer_num,
                parent_node,
-               conv_dims_i,
-               conv_pads_i,
-               num_output_channels
+               kernel_size,
+               padding,
+               out_channels
                ):
     batch_normalization_node = standard_batchnorm(statistics_group_size,
                                                   parent_node)
@@ -239,12 +251,12 @@ def conv_block(statistics_group_size,
 
     convolution_node = lbann.Convolution(
         relu_node,
-        conv_dims_i=conv_dims_i,
-        conv_pads_i=conv_pads_i,
-        conv_strides_i=1,
+        kernel_size=kernel_size,
+        padding=padding,
+        stride=1,
         has_bias=False,
         num_dims=2,
-        num_output_channels=num_output_channels
+        out_channels=out_channels
     )
     cumulative_layer_num += 1
     log('dense_block={b} dense_layer={l} Convolution. cumulative_layer_num={n}'.format(
@@ -257,7 +269,7 @@ def transition_layer(statistics_group_size,
                      current_block_num,
                      cumulative_layer_num,
                      parent_node,
-                     num_output_channels
+                     out_channels
                      ):
     batch_normalization_node = standard_batchnorm(statistics_group_size,
                                                   parent_node)
@@ -272,16 +284,17 @@ def transition_layer(statistics_group_size,
 
     convolution_node = lbann.Convolution(
         relu_node,
-        conv_dims_i=1,
-        conv_pads_i=0,
-        conv_strides_i=1,
+        kernel_size=1,
+        padding=0,
+        stride=1,
         has_bias=False,
         num_dims=2,
-        num_output_channels=num_output_channels
+        out_channels=out_channels
     )
     cumulative_layer_num += 1
     log('dense_block={b} > transition_layer Convolution. cumulative_layer_num={n}'.format(
         b=current_block_num, n=cumulative_layer_num))
+
 
     # 2x2 average pool, stride 2
     pooling_node = lbann.Pooling(
@@ -290,7 +303,7 @@ def transition_layer(statistics_group_size,
         pool_dims_i=2,
         pool_mode='average',
         pool_pads_i=0,
-        pool_strides_i=2
+        pool_strides_i=2 #2
     )
     cumulative_layer_num += 1
     log('dense_block={b} > transition_layer Pooling. cumulative_layer_num={n}'.format(
@@ -308,8 +321,7 @@ def classification_layer(cumulative_layer_num,
         pool_dims_i=8,
         pool_mode='average',
         pool_pads_i=1,
-        pool_strides_i=1,
-        name ='pool'
+        pool_strides_i=1
     )
     cumulative_layer_num += 1
     log('classification_layer Pooling. cumulative_layer_num={n}'.format(
@@ -318,8 +330,7 @@ def classification_layer(cumulative_layer_num,
     fully_connected_node = lbann.FullyConnected(
         pooling_node,
         num_neurons=10,#1000,
-        has_bias=False,
-        name = 'fc'
+        has_bias=False
     )
     cumulative_layer_num += 1
     log('classification_layer FullyConnected. cumulative_layer_num={n}'.format(
@@ -339,10 +350,10 @@ def get_args():
         '--job-name', action='store', default='lbann_densenet', type=str,
         help='scheduler job name (default: lbann_densenet)')
     parser.add_argument(
-        '--mini-batch-size', action='store', default=256, type=int,
+        '--mini-batch-size', action='store', default=128, type=int,
         help='mini-batch size (default: 256)', metavar='NUM')
     parser.add_argument(
-        '--num-epochs', action='store', default=90, type=int,
+        '--num-epochs', action='store', default=300, type=int,
         help='number of epochs (default: 90)', metavar='NUM')
     parser.add_argument(
         '--num-classes', action='store', default=10, type=int,
@@ -382,7 +393,7 @@ def set_up_experiment(args,
     callbacks = [lbann.CallbackPrint(),
                  lbann.CallbackTimer(),
                  lbann.CallbackDropFixedLearningRate(
-                     drop_epoch=[30, 60], amt=0.1)]
+                     drop_epoch=[150, 225], amt=0.1)]
     model = lbann.Model(args.num_epochs,
                         layers=layers,
                         objective_function=objective_function,
@@ -396,7 +407,6 @@ def set_up_experiment(args,
     # Set up optimizer
     if args.optimizer == 'sgd':
         print('Creating sgd optimizer')
-        #optimizer = lbann.optimizer.SGD(
         optimizer = lbann.SGD(
             learn_rate=args.optimizer_learning_rate,
             momentum=0.9,
@@ -417,10 +427,17 @@ def run_experiment(args,
                    data_reader,
                    optimizer):
     # Note: Use `lbann.run` instead for non-LC systems.
+
+
+    lbann_args="--procs_per_trainer=4"
+    nodes_args=1
     kwargs = lbann.contrib.args.get_scheduler_kwargs(args)
-    lbann.contrib.launcher.run(trainer, model, data_reader, optimizer,
-                               job_name=args.job_name,
-                               **kwargs)
+    lbann.contrib.launcher.run(trainer, model, data_reader, optimizer, nodes=nodes_args, lbann_args = lbann_args,job_name=args.job_name,**kwargs)
+
+    #kwargs = lbann.contrib.args.get_scheduler_kwargs(args)
+    #lbann.contrib.launcher.run(trainer, model, data_reader, optimizer,
+    #                           job_name=args.job_name,
+    #                           **kwargs)
 
 
 # Main function ################################################################
