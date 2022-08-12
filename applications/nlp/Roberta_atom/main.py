@@ -167,6 +167,86 @@ input_label = lbann.Identity(lbann.Slice(
 ))
 
 
+############
+# Masking
+############
+
+'''
+value = 0.15
+mask_percent_weights = lbann.Weights(initializer=lbann.ValueInitializer(values=value), name='mask_percent_weights', optimizer=lbann.NoOptimizer())
+mask_percent = lbann.WeightsLayer(dims=1, weights=mask_percent_weights, name='mask_percent', device='CPU')
+mask_percent = lbann.Reduction(mask_percent, mode='sum')
+'''
+mask_percent = 0.15
+
+rand = lbann.Uniform(min = 0, max = 1, neuron_dims = sequence_length)
+
+bos = lbann.Constant(value=bos_index, num_neurons=sequence_length)
+not_bos_index = lbann.NotEqual(input_strings, bos)
+
+eos = lbann.Constant(value=eos_index, num_neurons=sequence_length)
+not_eos_index = lbann.NotEqual(input_strings, eos)
+
+pad = lbann.Constant(value=pad_index, num_neurons=sequence_length)
+not_pad_index = lbann.NotEqual(input_strings, pad)
+
+mask = lbann.Constant(value=mask_percent, num_neurons=sequence_length)
+less_than_mask_percent = lbann.LessEqual(rand,mask)
+
+# index that is not bos, eos, pad, and mask_prob < 15
+special_index = lbann.Multiply(not_bos_index,not_eos_index)
+special_index = lbann.Multiply(special_index,not_pad_index,name="special_index")
+replace_index = lbann.Multiply(less_than_mask_percent,special_index,name="replace_index")
+
+replace_index_tokens = lbann.Slice(
+	replace_index,
+        slice_points=range(sequence_length+1),
+	name='replace_tokens',
+    )
+
+replace_index_tokens = [lbann.Identity(replace_index_tokens) for _ in range(sequence_length)]
+
+input_strings_tokens = lbann.Slice(
+	input_strings,
+        slice_points=range(sequence_length+1),
+	name='input_strings_tokens',
+    )
+
+input_strings_tokens = [lbann.Identity(input_strings_tokens) for _ in range(sequence_length)]
+
+input_masked_tokens = []
+input_label_tokens = [] 
+replace_token = []
+
+ignore_token = lbann.Constant(value = ignore_index, num_neurons =1)
+mask_token = lbann.Constant(value = mask_index, num_neurons =1)
+
+for i in range(sequence_length):
+    replace = lbann.Reduction(replace_index_tokens[i], mode='sum')
+    replace_token.append(replace)
+    
+    if(replace != 0): #not masked token
+        input_label_tokens.append(lbann.Constant(value = ignore_index, num_neurons =1))
+        input_masked_tokens.append(input_strings_tokens[i])       
+
+    else:  
+        input_label_tokens.append(input_strings_tokens[i])
+        input_masked_tokens.append(lbann.Constant(value = mask_index, num_neurons =1))
+
+
+input_masked = lbann.Concatenation(input_masked_tokens)
+input_label = lbann.Concatenation(input_label_tokens) 
+replace_out = lbann.Concatenation(replace_token)
+
+input_masked_out = lbann.Identity(input_masked,name='input_masked')
+input_label_out = lbann.Identity(input_label,name='input_label')
+replace_out_out = lbann.Identity(replace_out,name='replace_out')
+
+
+########
+# Model
+########
+
 robertamlm = RoBERTaMLM(config,load_weights=config.load_weights)
 output = robertamlm(input_masked)
 
