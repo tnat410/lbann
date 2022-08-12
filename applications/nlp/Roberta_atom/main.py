@@ -225,7 +225,7 @@ for i in range(sequence_length):
     replace = lbann.Reduction(replace_index_tokens[i], mode='sum')
     replace_token.append(replace)
     
-    if(replace != 0): #not masked token
+    if(replace == 0): #not masked token
         input_label_tokens.append(lbann.Constant(value = ignore_index, num_neurons =1))
         input_masked_tokens.append(input_strings_tokens[i])       
 
